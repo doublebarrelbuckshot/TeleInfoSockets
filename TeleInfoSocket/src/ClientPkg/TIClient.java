@@ -1,12 +1,22 @@
 package ClientPkg;
 
 import java.io.BufferedReader;
+
+import SendReceiveServices.*;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
+
+import javax.print.DocFlavor.URL;
 
 public class TIClient {
 
@@ -44,68 +54,184 @@ public class TIClient {
 				}
 				else
 				{
-					System.out.println("****** Please choose a menu item from 1 to 4 ******");
+					System.out.println("****** Please choose a menu item from 1 to 5 ******");
 				}
-			} catch (Exception e) {
+			} 
+			catch (Exception e) 
+			{
 				System.out.println("****** Your selection: " + sUserInput + " is not valid, try again please ******" );
 			}
-			
 		}
 		return 0;
 	}
+
+
 	public static void establishConnection(int option)
 	{
-		//port et adresse
 		int port=1500;
 		InetAddress adresse=null;
-
-		//socket
 		Socket socket = null;
-
-		//input-output
+		ObjectInputStream inputStream = null;
+		ObjectOutputStream outputStream = null;
 		BufferedReader input;
 		PrintWriter output;
-
 		String lineToBeSent;
-
 		BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
-		/*
-		 * INPUT IP ADDRESS
-		 */
-		boolean successIP = false;
-		String strIP = "";
+		adresse  = getUserInputIpAddress(br);
+		port = getUserInputPortNumber(br);
 
-		System.out.println("Please enter an IP address, or press 'Enter' to use the default IP address (127.0.0.1)");
-		while(!successIP)
+		//Connect to server
+		try 
 		{
+			System.out.println("Etablissement de connexion avec le serveur " +
+					adresse.getHostAddress()+
+					":" + port);
+			socket = new Socket(adresse, port);
+
+			outputStream = new ObjectOutputStream(socket.getOutputStream());
+			inputStream = new ObjectInputStream(socket.getInputStream());
+
+
+			System.out.println("Serveur " +  socket.getInetAddress() + ":" + socket.getPort()+ " est maintenant connecte");
+
+		} 
+		catch (UnknownHostException e) 
+		{
+			System.out.println("\nServeur " + adresse +":"+ port + " inconnu.");
+			return; // Si serveur inconnu, la fonction arrete ici.
+		}
+		catch (IOException e) 
+		{
+			System.out.println("connexion échouée, adresse/port incorrect");
+			System.exit(1);
+		}
+
+		String sIPandPort = socket.getInetAddress() + ":" + socket.getPort();
+		sIPandPort = sIPandPort.substring(1, sIPandPort.length()-1);
+		String sConsoleHeader =  "\t" + sIPandPort + " : ";
+
+		try {
+			output = new PrintWriter(socket.getOutputStream(),true);
+			input = new BufferedReader(new InputStreamReader(socket.getInputStream())); 
+
+			ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream); //receive bienvenue messager
+			if(option == 1)
+			{
+				performTest(socket, sConsoleHeader, input, output, outputStream, inputStream);			
+			}
+			if(option == 2)
+			{
+				sendFile(socket, sConsoleHeader, input, output, outputStream, inputStream, br);
+			}
+		} 
+		catch (IOException e1) 
+		{
+			e1.printStackTrace();
+		}
+	}
+
+	private static void performTest(Socket socket, String sConsoleHeader,
+			BufferedReader input, PrintWriter output, ObjectOutputStream outputStream, ObjectInputStream inputStream) 
+	{
+		//Send test msg
+		SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgTest, null);
+		//Send fin msg
+		SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFin, null);
+		ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream);
+	}
+
+	private static void sendFile(Socket socket, String sConsoleHeader,
+			BufferedReader input, PrintWriter output,
+			ObjectOutputStream outputStream, ObjectInputStream inputStream, BufferedReader br) 
+	{
+			try 
+			{
+				String sFileName = getUserInputFileName(br);
+				
+				//System.out.println("Enter file name");
+				//String sFileName = br.readLine(); //"test.txt";
+				int iIndexDot = sFileName.lastIndexOf('.');
+				String sNewFileName = new StringBuilder(sFileName).insert(iIndexDot, "_cp").toString();
+				//System.out.println("********STRING!!: " + str);
+				File file = new File(sFileName);
+				byte[] fileInBytes = new byte[(int) file.length()];
+				
+				FileInputStream fileInputStream = new FileInputStream(file);
+				fileInputStream.read(fileInBytes);
+				fileInputStream.close();
+				Message msgFileToSend = new Message(fileInBytes, MessageType.eMsgFileFragment);	   
+
+				//Send upload msg
+				SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgUpload, null);
+
+				//Create filename msg and send
+				Message msgFileName = new Message(sNewFileName, MessageType.eMsgFilename);
+				SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFilename, msgFileName);
+
+				//Send all file fragments
+				SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFileFragment, msgFileToSend);
+
+				//Send fin msg
+				SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFin, null);
+
+				//Receive closing msg
+				ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream); //receive au revoir
+			} 
+			catch (IOException e) {
+				e.printStackTrace();
+			}
+			catch (StringIndexOutOfBoundsException e)
+			{
+				System.out.println("Error with file name, try again");
+			}
+		
+	}
+
+	private static String getUserInputFileName(BufferedReader br) {
+		boolean bSuccessFileName = false;
+		String strFileName = "";
+		System.out.println("Please enter a file name with the extension:");
+		while(!bSuccessFileName)
+		{
+			FileInputStream fileInputStream = null;
 			try
 			{
-				strIP = br.readLine();
-				System.out.println(strIP);
-				if(strIP.equals(""))
+				strFileName = br.readLine();
+				if(strFileName.equals(""))
 				{
-					adresse = InetAddress.getByName("127.0.0.1");
-					successIP = true;
+				
 				}
 				else
 				{
-					adresse = InetAddress.getByName(strIP);
-					successIP = true;
+					int iIndexDot = strFileName.lastIndexOf('.');
+					File file = new File(strFileName);
+					if(file.exists() && !file.isDirectory()) 
+					{
+						bSuccessFileName = true;
+						break;
+					}
 				}
+				System.out.println("Error, please enter a file name with the extension");
+
 			}
 			catch (Exception e)
 			{
-				System.out.println("Error, please enter an IP address or press 'Enter' to use default IP address (127.0.0.1)");
+				System.out.println("Error, please enter a file name with the extension");
 			}
+			
 		}
+		return strFileName;
+	}
 
-		/*
-		 * INPUT PORT NUMBER
-		 */
+	/*
+	 * INPUT PORT NUMBER
+	 */
+	private static int getUserInputPortNumber(BufferedReader br) 
+	{
 		boolean successPort = false;
 		String strPort = "";
-
+		int port = 0;
 		System.out.println("Please enter a port number, or press 'Enter' to use the default port (1500)");
 		while(!successPort)
 		{
@@ -129,192 +255,40 @@ public class TIClient {
 				System.out.println("Error, please enter a port number or press 'Enter' to use default port (1500)");
 			}
 		}
-
-		//connexion au serveur
-		try 
-		{
-			System.out.println("Etablissement de connexion avec le serveur " +
-					adresse.getHostAddress()+
-					":" + port);
-			socket = new Socket(adresse, port);
-
-			System.out.println("Serveur " +  socket.getInetAddress() + ":" + socket.getPort()+ " est maintenant connecte");
-
-		} catch (UnknownHostException e) {
-			System.out.println("\nServeur " + adresse +":"+ port + " inconnu.");
-			return; // Si serveur inconnu, la fonction arrete ici.
-		}
-		catch (IOException e) 
-		{
-			System.out.println("connexion échouée, adresse/port incorrect");
-			//erreur, on quitte
-			System.exit(1);
-		}
-
-		String sIPandPort = socket.getInetAddress() + ":" + socket.getPort();
-		sIPandPort = sIPandPort.substring(1, sIPandPort.length()-1);
-		String sConsoleHeader =  "\t" + sIPandPort + " : ";
-
-		try {
-			output = new PrintWriter(socket.getOutputStream(),true);
-			input = new BufferedReader(new InputStreamReader(socket.getInputStream())); 
-
-			receiveMessage(socket, sConsoleHeader, input, output); //receive bienvenue messager
-			if(option == 1)
-			{
-				sendMessage(socket, sConsoleHeader, input, output, MessageType.eMsgTest);
-				sendMessage(socket, sConsoleHeader, input, output, MessageType.eMsgFin);
-				receiveMessage(socket, sConsoleHeader, input, output); //receive au revoir
-			}
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
+		return port;
 	}
 
-
-	private static void sendMessage(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output, MessageType eMT) {
-		int trameNumber = 0;
-
-		try
+	/*
+	 * INPUT IP ADDRESS
+	 */
+	private static InetAddress getUserInputIpAddress(BufferedReader br) 
+	{
+		boolean successIP = false;
+		String strIP = "";
+		InetAddress adresse = null;
+		System.out.println("Please enter an IP address, or press 'Enter' to use the default IP address (127.0.0.1)");
+		while(!successIP)
 		{
-			System.out.println(determineHeaderBanner(eMT));
-			String msgSendMsg = trameNumber + "*" + determineMsgToSend(eMT);
-			output.println(msgSendMsg);
-
-			System.out.println(sConsoleHeader + "Transmission de la trame " + trameNumber + "(" + msgSendMsg.getBytes().length + " bytes" + ")" );
-
-			System.out.println(sConsoleHeader + "Activation du timeout 1000ms");
-			boolean bMsgReceived = false;
-			long endTimeMillis = System.currentTimeMillis() + 1000;
-			while (System.currentTimeMillis() < endTimeMillis) 
+			try
 			{
-				String sMsgReceived = input.readLine();
-				if(sMsgReceived != null && sMsgReceived.equals(trameNumber + "*ServerMsgReceived"));
+				strIP = br.readLine();
+				System.out.println(strIP);
+				if(strIP.equals(""))
 				{
-					bMsgReceived = true;
-					System.out.println(sConsoleHeader + "Recu acquittement de la transmission de trame " + trameNumber );
-					waitInMS(1000);
+					adresse = InetAddress.getByName("127.0.0.1");
+					successIP = true;
+				}
+				else
+				{
+					adresse = InetAddress.getByName(strIP);
+					successIP = true;
 				}
 			}
-			if(bMsgReceived == false)
+			catch (Exception e)
 			{
-				System.out.println(sConsoleHeader + "Timeout a la reception de l'acquittement trame " + trameNumber);
+				System.out.println("Error, please enter an IP address or press 'Enter' to use default IP address (127.0.0.1)");
 			}
 		}
-		catch (IOException e) 
-		{
-			System.out.println(e);
-		}
-
-	}
-
-	private static void receiveMessage(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output) 
-	{
-		try 
-		{
-			while(true) 
-			{
-				String sMsgReceived = input.readLine();
-				if(sMsgReceived != null)
-				{
-					int iTrameNumber = getTrameNumber(sMsgReceived);
-					sMsgReceived = isolateMessage(sMsgReceived);
-					MessageType eMT = determineIncomingMsgType(sMsgReceived);
-					System.out.println(determineHeaderBanner(eMT)); //("Recevoir bienvenue");
-					System.out.println(sConsoleHeader + "Recu la transmission de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
-
-					output.println(iTrameNumber + "*ClientMsgReceived");
-					System.out.println(sConsoleHeader + "Acquittement de la transmission de la trame " + iTrameNumber);
-
-					/*
-					 * Verify, what conditions need to be met for this msg to appear?
-					 */
-					System.out.println(sConsoleHeader + "Accept la transmission de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
-
-					if(eMT == MessageType.eMsgBienvenue)
-					{
-						System.out.println("Bienvenue client " + socket.getInetAddress() + ":" + socket.getPort());
-					}
-					if(eMT == MessageType.eMsgAuRevoir)
-					{
-						try 
-						{
-							socket.close();
-							System.out.println("Au revoir client " + socket.getInetAddress() + ":" + socket.getPort());
-						}
-						catch (IOException e) 
-						{
-							System.out.println(e);
-						}
-					}
-					break;
-				}
-			}
-		}
-		catch (IOException e) 
-		{
-			System.out.println(e);
-		}
-	}
-
-	public enum MessageType
-	{
-		eMsgBienvenue,
-		eMsgTest,
-		eMsgFin,
-		eMsgAuRevoir,
-		eUnknown
-	}
-
-	private static MessageType determineIncomingMsgType(String strMsgReceived)
-	{
-		if(strMsgReceived.equals("Connexion réussie. Bienvenue !"))
-			return MessageType.eMsgBienvenue;
-		if(strMsgReceived.equals("Au revoir client!"))
-			return MessageType.eMsgAuRevoir;
-		return MessageType.eUnknown;	
-	}
-
-	private static String determineMsgToSend(MessageType eMT)
-	{
-		if(eMT == MessageType.eMsgTest)
-			return "test";
-		else if(eMT == MessageType.eMsgFin)
-			return "fin";
-		return "";
-	}
-
-	private static String determineHeaderBanner(MessageType eMT)
-	{
-		if(eMT == MessageType.eMsgBienvenue)
-			return "Recevoir bienvenue";
-		else if(eMT == MessageType.eMsgTest)
-			return "Envoi de la commande: test";
-		else if(eMT == MessageType.eMsgFin)
-			return "Envoi du message de fin";
-		else if(eMT == MessageType.eMsgAuRevoir)
-			return "Recevoir au revoir";
-		return "";
-	}
-
-	private static void waitInMS(int ms)
-	{
-		long endTimeMillis = System.currentTimeMillis() + ms;
-		while (System.currentTimeMillis() < endTimeMillis) {}
-		return;
-	}
-
-	private static String isolateMessage(String sMsgReceived)
-	{
-		int iTrameEndIndex = sMsgReceived.indexOf("*");
-		return sMsgReceived.substring(iTrameEndIndex + 1, sMsgReceived.length());
-	}
-
-	private static int getTrameNumber(String sMsgReceived) {
-		int iTrameEndIndex = sMsgReceived.indexOf("*");
-		if(iTrameEndIndex == -1) 
-			return -1;
-		String sTemp = sMsgReceived.substring(0, iTrameEndIndex);
-		return Integer.parseInt(sTemp);
+		return adresse;
 	}
 }
