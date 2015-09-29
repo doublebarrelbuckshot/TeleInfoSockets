@@ -15,16 +15,23 @@ import java.util.Collections;
 
 
 public class ReceiveServices {
-
+	public static int errorCount = 0;
 	public static void receiveMessage(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output, ObjectOutputStream outputStream, ObjectInputStream inputStream) 
 	{
 		try 
 		{
 			boolean isReceivingFile = false;
 			Message fileMsgReceived = null;
+			boolean justRecievedFile = false;
+			boolean bExpectingRetransmission = false;
 			String sMsgFileName = "";
 			while(true) 
 			{
+				String strTransmission = "Transmission ";
+				if(bExpectingRetransmission)
+				{
+					strTransmission = "Retransmission ";
+				}
 				String sMsgReceived = "";
 				MessageFragment mfReceived;
 				mfReceived = (MessageFragment) inputStream.readObject();
@@ -40,9 +47,10 @@ public class ReceiveServices {
 						{
 							System.out.println("File Received");
 							isReceivingFile = false;
+							justRecievedFile = true;
 						}
 					}
-					
+
 					if(isReceivingFile)
 					{
 						if(eMT == MessageType.eMsgFilename)
@@ -64,48 +72,70 @@ public class ReceiveServices {
 						}
 					}
 
-					System.out.println(Tools.determineHeaderBannerReceive(eMT, mfReceived, sMsgFileName)); //("Recevoir bienvenue");
-					System.out.println(sConsoleHeader + "Recu la transmission de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
+					System.out.println(Tools.determineHeaderBannerReceive(eMT, mfReceived, sMsgFileName)); 
+					System.out.println(sConsoleHeader + "Recu la " + strTransmission + "de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
 
-					Message confirmationMessage = new Message("ClientMsgReceived", MessageType.eMsgClientConfirmation); 
+					//Count only during reception of file trame
+					if(eMT == MessageType.eMsgFileFragment)
+						errorCount++;
 
-					outputStream.writeObject(confirmationMessage.getListMsgFragments().get(0));
-
-					System.out.println(sConsoleHeader + "Acquittement de la transmission de la trame " + iTrameNumber);
-
-					/*
-					 * Verify, what conditions need to be met for this msg to appear?
-					 */
-					System.out.println(sConsoleHeader + "Accept la transmission de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
-					System.out.println( Tools.determineFooterBanner(eMT));
-
-					if(eMT == MessageType.eMsgBienvenue)
+					//on 2nd file trame being received, don't send confirmation
+					if(errorCount != 2 )
 					{
-						System.out.println("Bienvenue client " + socket.getInetAddress() + ":" + socket.getPort());
-						break;
+						Message confirmationMessage = new Message("ClientMsgReceived", MessageType.eMsgClientConfirmation); 
+						outputStream.writeObject(confirmationMessage.getListMsgFragments().get(0));			
+						bExpectingRetransmission = false;
 					}
-					if(eMT == MessageType.eMsgAuRevoir)
+					else
 					{
-						try 
+						System.out.println(sConsoleHeader + "Simulation de la perte de la deuxieme trame de fichier, l'acquittement n'est pas envoye.");
+						bExpectingRetransmission = true;
+					}
+					
+					//If we simulate the loss of 2nd trame, then don't go in here
+					if(!bExpectingRetransmission)
+					{
+
+						System.out.println(sConsoleHeader + "Acquittement de la " + strTransmission + "de la trame " + iTrameNumber);
+
+						/*
+						 * Verify, what conditions need to be met for this msg to appear?
+						 */
+						System.out.println(sConsoleHeader + "Accept la " + strTransmission + "de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
+						System.out.println( Tools.determineFooterBanner(eMT));
+
+						if(eMT == MessageType.eMsgBienvenue)
 						{
-							socket.close();
-							System.out.println("Au revoir client " + socket.getInetAddress() + ":" + socket.getPort());
+							System.out.println("Bienvenue client " + socket.getInetAddress() + ":" + socket.getPort());
 							break;
 						}
-						catch (IOException e) 
+						if(eMT == MessageType.eMsgAuRevoir)
 						{
-							System.out.println(e);
+							try 
+							{
+								socket.close();
+								System.out.println("Au revoir client " + socket.getInetAddress() + ":" + socket.getPort());
+								break;
+							}
+							catch (IOException e) 
+							{
+								System.out.println(e);
+							}
 						}
-					}
-					if(eMT == MessageType.eMsgFin)
-					{
-						reconstructFileAndSave(fileMsgReceived, sMsgFileName);
-						break;
-					}
-			
-					if(eMT == MessageType.eMsgUpload)
-					{
-						isReceivingFile = true;
+						if(eMT == MessageType.eMsgFin)
+						{
+							if(justRecievedFile)
+							{
+								reconstructFileAndSave(fileMsgReceived, sMsgFileName);
+								justRecievedFile = false;
+							}
+							break;
+						}
+
+						if(eMT == MessageType.eMsgUpload)
+						{
+							isReceivingFile = true;
+						}
 					}
 				}
 			}
@@ -124,7 +154,7 @@ public class ReceiveServices {
 		ArrayList<MessageFragment> listFragments = fileMsgReceived.getListMsgFragments();
 		Collections.sort(listFragments);
 		ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
-		
+
 		for(MessageFragment mf : listFragments)
 		{
 			try 
@@ -135,7 +165,7 @@ public class ReceiveServices {
 				e.printStackTrace();
 			}
 		}
-		
+
 		byte[] bResult =  outputStream.toByteArray( );
 		FileOutputStream fos;
 		try 

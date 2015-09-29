@@ -21,6 +21,12 @@ public class MessageFragment implements java.io.Serializable, Comparable<Message
 		this.messageType = messageType;
 	}
 	
+	public String toString()
+	{
+		String result = "";
+		result += "Trame: " + trameNumber + "  bytesUsed: " + bytesUsed;
+		return result;
+	}
 	public int getTrameNumber() {
 		return trameNumber;
 	}
