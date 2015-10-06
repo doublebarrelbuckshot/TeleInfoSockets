@@ -10,5 +10,7 @@ public enum MessageType {
 		eMsgClientConfirmation,
 		eMsgUpload,
 		eMsgFileFragment,
-		eMsgFilename
+		eMsgFilename, 
+		eMsgSendDir, 
+		eMsgReceiveDir
 }

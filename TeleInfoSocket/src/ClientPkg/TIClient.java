@@ -124,11 +124,25 @@ public class TIClient {
 			{
 				sendFile(socket, sConsoleHeader, input, output, outputStream, inputStream, br);
 			}
+			if(option == 3)
+			{
+				getDir(socket, sConsoleHeader, input, output, outputStream, inputStream, br);
+			}
 		} 
 		catch (IOException e1) 
 		{
 			e1.printStackTrace();
 		}
+	}
+
+	private static void getDir(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output,ObjectOutputStream outputStream, ObjectInputStream inputStream, BufferedReader br) {
+
+			SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgSendDir, null);
+			ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream); //get dir msg
+			SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFin, null);
+			ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream); //receive au revoir
+			
+			System.out.println("\nLister les fichers termine");
 	}
 
 	private static void performTest(Socket socket, String sConsoleHeader,
@@ -139,15 +153,19 @@ public class TIClient {
 		//Send fin msg
 		SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgFin, null);
 		ReceiveServices.receiveMessage(socket, sConsoleHeader, input, output, outputStream, inputStream);
+
+		System.out.println("\nTest de connexion termine");
+
 	}
 
 	private static void sendFile(Socket socket, String sConsoleHeader,
 			BufferedReader input, PrintWriter output,
 			ObjectOutputStream outputStream, ObjectInputStream inputStream, BufferedReader br) 
 	{
+			String sFileName = "";
 			try 
 			{
-				String sFileName = getUserInputFileName(br);
+				sFileName = getUserInputFileName(br);
 				
 				//System.out.println("Enter file name");
 				//String sFileName = br.readLine(); //"test.txt";
@@ -185,6 +203,9 @@ public class TIClient {
 			{
 				System.out.println("Error with file name, try again");
 			}
+			
+			System.out.println("\nTransfert de fichier termine: " + sFileName);
+
 		
 	}
 

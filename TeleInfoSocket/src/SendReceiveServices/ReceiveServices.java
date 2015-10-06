@@ -16,13 +16,16 @@ import java.util.Collections;
 
 public class ReceiveServices {
 	public static int errorCount = 0;
-	public static void receiveMessage(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output, ObjectOutputStream outputStream, ObjectInputStream inputStream) 
+	public static boolean receiveMessage(Socket socket, String sConsoleHeader, BufferedReader input, PrintWriter output, ObjectOutputStream outputStream, ObjectInputStream inputStream) 
 	{
 		try 
 		{
 			boolean isReceivingFile = false;
+			boolean isReceivingDirectory = false;
+			
 			Message fileMsgReceived = null;
 			boolean justRecievedFile = false;
+			boolean justReceivedDir = false;
 			boolean bExpectingRetransmission = false;
 			String sMsgFileName = "";
 			while(true) 
@@ -40,15 +43,25 @@ public class ReceiveServices {
 					int iTrameNumber = mfReceived.getTrameNumber();
 					sMsgReceived = new String(Arrays.copyOfRange(mfReceived.getMessageBytes(), 0, mfReceived.getBytesUsed())); 
 					MessageType eMT = mfReceived.getMessageType(); 
-
+					
 					if(eMT == MessageType.eMsgFin)
 					{
-						if(isReceivingFile)
+						if(isReceivingFile && !isReceivingDirectory)
 						{
 							System.out.println("File Received");
 							isReceivingFile = false;
 							justRecievedFile = true;
 						}
+						if(isReceivingDirectory)
+						{
+							isReceivingFile = false;
+							justReceivedDir = true;
+						}
+					}
+					if(eMT == MessageType.eMsgReceiveDir)
+					{
+						isReceivingDirectory = true;
+						isReceivingFile = true;
 					}
 
 					if(isReceivingFile)
@@ -76,7 +89,7 @@ public class ReceiveServices {
 					System.out.println(sConsoleHeader + "Recu la " + strTransmission + "de la trame " + iTrameNumber + "(" + sMsgReceived.getBytes().length + " octets)");
 
 					//Count only during reception of file trame
-					if(eMT == MessageType.eMsgFileFragment)
+					if(eMT == MessageType.eMsgFileFragment && !isReceivingDirectory)
 						errorCount++;
 
 					//on 2nd file trame being received, don't send confirmation
@@ -129,12 +142,22 @@ public class ReceiveServices {
 								reconstructFileAndSave(fileMsgReceived, sMsgFileName);
 								justRecievedFile = false;
 							}
+							if(justReceivedDir)
+							{
+								reconstructDirAndPrint(fileMsgReceived);
+								justReceivedDir = false;
+							}
 							break;
 						}
 
 						if(eMT == MessageType.eMsgUpload)
 						{
 							isReceivingFile = true;
+						}
+
+						if(eMT == MessageType.eMsgSendDir)
+						{
+							return true; //signal that we need to send a message now.
 						}
 					}
 				}
@@ -147,6 +170,29 @@ public class ReceiveServices {
 		catch (ClassNotFoundException e1) {
 			e1.printStackTrace();
 		}
+		return false;
+	}
+
+	private static void reconstructDirAndPrint(Message fileMsgReceived) {
+		ArrayList<MessageFragment> listFragments = fileMsgReceived.getListMsgFragments();
+		Collections.sort(listFragments);
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream( );
+
+		for(MessageFragment mf : listFragments)
+		{
+			try 
+			{
+				outputStream.write( mf.getMessageBytes() );
+			} 
+			catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		byte[] bResult =  outputStream.toByteArray( );
+		String strDir = new String(bResult);
+		
+		System.out.println("Contenu du repertoire courant du serveur:\n" + strDir);
+		
 	}
 
 	private static void reconstructFileAndSave(Message fileMsgReceived, String sMsgFileName) 

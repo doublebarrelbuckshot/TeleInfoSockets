@@ -41,9 +41,9 @@ public class SendServices {
 					
 					System.out.println(sConsoleHeader + "Activation du timeout 1000ms");
 					
-					long endTimeMillis = System.currentTimeMillis() + 1000;
-					while (System.currentTimeMillis() < endTimeMillis) 
-					{
+					//long endTimeMillis = System.currentTimeMillis() + 1000;
+					//while (System.currentTimeMillis() < endTimeMillis) 
+					//{
 						String sMsgReceived = "";
 						MessageFragment mfReceived = null;
 
@@ -97,7 +97,7 @@ public class SendServices {
 								}
 							}
 						}
-					}
+					//}
 					if(bMsgReceived == false)
 					{
 						System.out.println(sConsoleHeader + "Timeout a la reception de l'acquittement trame " +  mf.getTrameNumber());
@@ -109,7 +109,6 @@ public class SendServices {
 		catch (IOException e) 
 		{
 			System.out.println(e);
-			System.out.println("asdfasdF");
 		}
 		//		 catch(SocketTimeoutException ste)
 		//		 {

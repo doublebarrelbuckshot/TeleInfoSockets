@@ -33,6 +33,10 @@ public class Tools {
 			return "Reception de la trame " + mfFragmentReceived.getTrameNumber() + " de fichier " + sMsgFileName;
 		else if(eMT == MessageType.eMsgFilename)
 			return "Recevoir le nom de fichier";
+		else if(eMT == MessageType.eMsgSendDir)
+			return "Recevoir la commande: dir";
+		else if(eMT == MessageType.eMsgReceiveDir)
+			return "Recevoir la liste";
 		return "MISSING BANNER";
 	}
 	
@@ -54,6 +58,10 @@ public class Tools {
 			return "Envoi du nom de fichier: " + sFileName;
 		else if(eMT == MessageType.eMsgFileFragment)
 			return "Envoi de la trame " + mf.getTrameNumber() + " de fichier" ;
+		else if(eMT == MessageType.eMsgSendDir)
+			return "Envoi de la commande: dir";
+		else if(eMT == MessageType.eMsgReceiveDir)
+			return "Envoi de la liste des fichiers";
 		return "MISSING BANNER";
 	}
 	
@@ -110,6 +118,8 @@ public class Tools {
 			return new Message("Au revoir client!", eMT);
 		else if(eMT == MessageType.eMsgUpload)
 			return new Message("upload", eMT);
+		else if(eMT == MessageType.eMsgSendDir)
+			return new Message("sendDIR", eMT);
 		return new Message("", eMT);
 	}
 
@@ -123,6 +133,8 @@ public class Tools {
 			return "Recu message de fin";
 		else if(eMT == MessageType.eMsgAuRevoir)
 			return "Deconnecte, le socket est ferme";
+		else if(eMT == MessageType.eMsgSendDir)
+			return "Recu la commande: dir";
 
 		return "";
 	}
