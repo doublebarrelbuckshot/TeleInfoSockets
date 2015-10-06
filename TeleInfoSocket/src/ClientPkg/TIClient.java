@@ -23,10 +23,12 @@ public class TIClient {
 	public static void main(String[] args) 
 	{
 		int iMenuSelection = showMenuReturnChoice();
-		if(iMenuSelection == 0)
+		if(iMenuSelection == 4)
 		{
-			System.out.println("Error, somehow menu selection is 0");
+			System.out.println("Application Exited Normally");
+			System.exit(0);
 		}
+
 		establishConnection(iMenuSelection);
 	}
 
@@ -128,6 +130,7 @@ public class TIClient {
 			{
 				getDir(socket, sConsoleHeader, input, output, outputStream, inputStream, br);
 			}
+
 		} 
 		catch (IOException e1) 
 		{

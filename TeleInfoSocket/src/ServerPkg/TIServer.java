@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -110,7 +111,13 @@ public class TIServer {
 				SendServices.sendMessage(socket, sConsoleHeader, input, output, outputStream, inputStream, MessageType.eMsgAuRevoir, null);
 			}
 
-		} catch (IOException e) {
+		}
+		catch(BindException be)
+		{
+			System.out.println("Bind error! Please ensure that another application is not using the Address and Port specified and restart the application.");
+		}
+		catch (IOException e) 
+		{
 			System.out.println(e);
 		}
 	}
